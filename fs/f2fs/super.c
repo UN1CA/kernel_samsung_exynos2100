@@ -26,6 +26,9 @@
 #include <linux/quota.h>
 #include <linux/unicode.h>
 #include <linux/iversion.h>
+#include <linux/zstd.h>
+#include <linux/lz4.h>
+#include <linux/cleancache.h>
 
 #include "f2fs.h"
 #include "node.h"
