@@ -153,7 +153,6 @@ static void bpf_skops_parse_hdr(struct sock *sk, struct sk_buff *skb)
 				       BPF_SOCK_OPS_PARSE_UNKNOWN_HDR_OPT_CB_FLAG);
 	bool parse_all_opt = BPF_SOCK_OPS_TEST_FLAG(tcp_sk(sk),
 						    BPF_SOCK_OPS_PARSE_ALL_HDR_OPT_CB_FLAG);
-	struct bpf_sock_ops_kern sock_ops;
 
 	if (likely(!unknown_opt && !parse_all_opt))
 		return;
@@ -169,15 +168,12 @@ static void bpf_skops_parse_hdr(struct sock *sk, struct sk_buff *skb)
 		return;
 	}
 
-	sock_owned_by_me(sk);
-
-	memset(&sock_ops, 0, offsetof(struct bpf_sock_ops_kern, temp));
-	sock_ops.op = BPF_SOCK_OPS_PARSE_HDR_OPT_CB;
-	sock_ops.is_fullsock = 1;
-	sock_ops.sk = sk;
-	bpf_skops_init_skb(&sock_ops, skb, tcp_hdrlen(skb));
-
-	BPF_CGROUP_RUN_PROG_SOCK_OPS(&sock_ops);
+	/* BPF prog will have access to the sk and skb.
+	 *
+	 * The bpf running context preparation and the actual bpf prog
+	 * calling will be implemented in a later PATCH together with
+	 * other bpf pieces.
+	 */
 }
 
 static void bpf_skops_established(struct sock *sk, int bpf_op,
@@ -191,9 +187,7 @@ static void bpf_skops_established(struct sock *sk, int bpf_op,
 	sock_ops.op = bpf_op;
 	sock_ops.is_fullsock = 1;
 	sock_ops.sk = sk;
-	/* sk with TCP_REPAIR_ON does not have skb in tcp_finish_connect */
-	if (skb)
-		bpf_skops_init_skb(&sock_ops, skb, tcp_hdrlen(skb));
+	/* skb will be passed to the bpf prog in a later patch. */
 
 	BPF_CGROUP_RUN_PROG_SOCK_OPS(&sock_ops);
 }
@@ -7145,25 +7139,13 @@ static void tcp_reqsk_record_syn(const struct sock *sk,
 	if (tcp_sk(sk)->save_syn) {
 		u32 len = skb_network_header_len(skb) + tcp_hdrlen(skb);
 		struct saved_syn *saved_syn;
-		u32 mac_hdrlen;
-		void *base;
-
-		if (tcp_sk(sk)->save_syn == 2) {  /* Save full header. */
-			base = skb_mac_header(skb);
-			mac_hdrlen = skb_mac_header_len(skb);
-			len += mac_hdrlen;
-		} else {
-			base = skb_network_header(skb);
-			mac_hdrlen = 0;
-		}
 
 		saved_syn = kmalloc(struct_size(saved_syn, data, len),
 				    GFP_ATOMIC);
 		if (saved_syn) {
-			saved_syn->mac_hdrlen = mac_hdrlen;
 			saved_syn->network_hdrlen = skb_network_header_len(skb);
 			saved_syn->tcp_hdrlen = tcp_hdrlen(skb);
-			memcpy(saved_syn->data, base, len);
+			memcpy(saved_syn->data, skb_network_header(skb), len);
 			req->saved_syn = saved_syn;
 		}
 	}

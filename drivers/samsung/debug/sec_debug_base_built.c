@@ -102,9 +102,9 @@ static void show_data(unsigned long addr, int nbytes, const char *name)
 					pr_cont(" ********\n");
 				else
 					pr_cont(" ********");
-			} else if (probe_kernel_address(p, data)) {
+			} else if (copy_from_kernel_nofault(&data, p, sizeof(data))) {
 #else
-			if (probe_kernel_address(p, data)) {
+			if (copy_from_kernel_nofault(&data, p, sizeof(data))) {
 #endif
 				if (j == 7)
 					pr_cont(" ********\n");
