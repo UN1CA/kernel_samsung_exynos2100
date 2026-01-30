@@ -21,52 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - model: r9s
-            branch: rebased-11
-            variant: ksu
-          - model: r9s
-            branch: rebased-11
-            variant: susfs
-          - model: r9s
-            branch: rebased-11
-            variant: vanilla
-    
-          - model: o1s
-            branch: rebased-11
-            variant: ksu
-          - model: o1s
-            branch: rebased-11
-            variant: susfs
-          - model: o1s
-            branch: rebased-11
-            variant: vanilla
-    
-          - model: t2s
-            branch: rebased-11
-            variant: ksu
-          - model: t2s
-            branch: rebased-11
-            variant: susfs
-          - model: t2s
-            branch: rebased-11
-            variant: vanilla
-    
-          - model: p3s
-            branch: rebased-11
-            variant: ksu
-          - model: p3s
-            branch: rebased-11
-            variant: susfs
-          - model: p3s
-            branch: rebased-11
-            variant: vanilla
-    
+        model: [r9s, o1s, t2s, p3s]
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        ref: ${{ matrix.branch }}
+        ref: rebased-11
         fetch-depth: 0
         submodules: recursive
 
@@ -80,28 +41,16 @@ jobs:
           bison binutils-dev libiberty-dev zip unzip libncurses5-dev curl git ninja-build \
           python3 libssl-dev gcc-aarch64-linux-gnu cpio gawk libarchive-tools lz4 repo
 
-    - name: Set build flags for variant
-      id: vars
-      run: |
-        if [ "${{ matrix.variant }}" = "ksu" ]; then
-          echo "FLAGS=-k y" >> $GITHUB_OUTPUT
-        elif [ "${{ matrix.variant }}" = "susfs" ]; then
-          echo "FLAGS=-k y -s y" >> $GITHUB_OUTPUT
-        else
-          echo "FLAGS=" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Run kernel build
+    - name: Run kernel build (vanilla)
       run: |
         chmod +x ./build.sh
-        ./build.sh -m ${{ matrix.model }} ${{ steps.vars.outputs.FLAGS }}
+        ./build.sh -m ${{ matrix.model }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.model }}-${{ matrix.branch }}-${{ matrix.variant }}
+        name: ${{ matrix.model }}-rebased-11-vanilla
         path: build/out/${{ matrix.model }}/*.zip
-
 
   release:
     needs: build
