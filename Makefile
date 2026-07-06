@@ -911,17 +911,12 @@ endif
 
 ifdef CONFIG_LTO_CLANG
 ifdef CONFIG_THINLTO
-<<<<<<< HEAD
 CC_FLAGS_LTO_CLANG := -flto=thin -funified-lto -fno-split-lto-unit
-KBUILD_LDFLAGS	+= --thinlto-cache-dir=.thinlto-cache
 
 # LLVM tunings
 LD_FLAGS_LTO_CLANG += -mllvm -import-hot-multiplier=2
 LD_FLAGS_LTO_CLANG += -mllvm -inline-threshold=300
 LD_FLAGS_LTO_CLANG += -mllvm -import-instr-limit=30
-=======
-CC_FLAGS_LTO_CLANG := -flto=thin $(call cc-option, -fsplit-lto-unit)
->>>>>>> e44286105ef6a (kbuild: Remove support for Clang's ThinLTO caching)
 else
 CC_FLAGS_LTO_CLANG := -flto
 endif
