@@ -108,8 +108,6 @@ static int __mfc_core_prot_firmware(struct mfc_core *core, struct mfc_ctx *ctx)
 
 	mfc_debug(2, "DRM F/W region protected\n");
 	core->fw.drm_status = 1;
-
-	mfc_core_change_fw_state(core, 1, MFC_FW_VERIFIED, 1);
 	mfc_core_debug_leave();
 
 	return 0;
@@ -150,7 +148,6 @@ static void __mfc_core_unprot_firmware(struct mfc_core *core, struct mfc_ctx *ct
 		core->drm_fw_prot = NULL;
 	}
 #endif
-	mfc_core_change_fw_state(core, 1, MFC_FW_VERIFIED, 0);
 
 	mfc_core_debug_leave();
 }
@@ -433,13 +430,6 @@ int __mfc_core_instance_init(struct mfc_core *core, struct mfc_ctx *ctx)
 	if (core->num_inst == 1) {
 		mfc_debug(2, "it is first instance in to core-%d\n", core->id);
 
-		mfc_core_debug(2, "power on\n");
-		ret = mfc_core_pm_power_on(core);
-		if (ret) {
-			mfc_core_err("Failed block power on, ret=%d\n", ret);
-			goto err_power_on;
-		}
-
 		/* Load the FW */
 		ret = mfc_request_load_firmware(core);
 		if (ret)
@@ -452,6 +442,13 @@ int __mfc_core_instance_init(struct mfc_core *core, struct mfc_ctx *ctx)
 #endif
 
 #if !IS_ENABLED(CONFIG_EXYNOS_IMGLOADER)
+		mfc_core_debug(2, "power on\n");
+		ret = mfc_core_pm_power_on(core);
+		if (ret) {
+			mfc_core_err("Failed block power on, ret=%d\n", ret);
+			goto err_power_on;
+		}
+
 #if IS_ENABLED(CONFIG_EXYNOS_S2MPU)
 		ret = __mfc_verify_fw(core, 0, core->fw_buf.paddr,
 				core->fw.fw_size, core->fw_buf.size);
@@ -459,7 +456,6 @@ int __mfc_core_instance_init(struct mfc_core *core, struct mfc_ctx *ctx)
 			goto err_verify_fw;
 #endif
 #endif
-		mfc_core_change_fw_state(core, 0, MFC_FW_VERIFIED, 1);
 
 		ret = __mfc_core_init(core, ctx);
 		if (ret)
@@ -485,19 +481,20 @@ err_init_core:
 
 err_verify_fw:
 #endif
+	mfc_core_pm_power_off(core);
+
+err_power_on:
 #endif
 #if IS_ENABLED(CONFIG_EXYNOS_CONTENT_PATH_PROTECTION)
 	__mfc_core_unprot_firmware(core, ctx);
 
 err_fw_prot:
-#endif
 #if IS_ENABLED(CONFIG_EXYNOS_IMGLOADER)
 	imgloader_shutdown(&core->mfc_imgloader_desc);
+	mfc_core_pm_power_off(core);
+#endif
 #endif
 err_fw_load:
-	mfc_core_pm_power_off(core);
-
-err_power_on:
 	core->core_ctx[ctx->num] = 0;
 	kfree(core->core_ctx[ctx->num]);
 
@@ -1247,13 +1244,11 @@ int mfc_imgloader_verify_fw(struct imgloader_desc *desc, phys_addr_t fw_phys_bas
 
 	mfc_core_debug_enter();
 
-	if (!mfc_core_pm_get_pwr_ref_cnt(core)) {
-		mfc_core_debug(2, "power on\n");
-		ret = mfc_core_pm_power_on(core);
-		if (ret) {
-			mfc_core_err("failed block power on, ret=%d\n", ret);
-			return ret;
-		}
+	mfc_core_debug(2, "power on\n");
+	ret = mfc_core_pm_power_on(core);
+	if (ret) {
+		mfc_core_err("failed block power on, ret=%d\n", ret);
+		return ret;
 	}
 
 #if IS_ENABLED(CONFIG_EXYNOS_S2MPU)
@@ -1274,13 +1269,11 @@ int mfc_imgloader_blk_pwron(struct imgloader_desc *desc)
 
 	mfc_core_debug_enter();
 
-	if (!mfc_core_pm_get_pwr_ref_cnt(core)) {
-		mfc_core_debug(2, "power on\n");
-		ret = mfc_core_pm_power_on(core);
-		if (ret) {
-			mfc_core_err("Failed %s block power on, ret=%d\n", ret);
-			return ret;
-		}
+	mfc_core_debug(2, "power on\n");
+	ret = mfc_core_pm_power_on(core);
+	if (ret) {
+		mfc_core_err("Failed %s block power on, ret=%d\n", ret);
+		return ret;
 	}
 
 	mfc_core_debug_leave();
@@ -1309,7 +1302,6 @@ int mfc_imgloader_shutdown(struct imgloader_desc *desc)
 	struct mfc_core *core = (struct mfc_core *)desc->dev->driver_data;
 
 	mfc_core_debug(2, "[F/W] release verify fw\n");
-	mfc_core_change_fw_state(core, 0, MFC_FW_VERIFIED, 0);
 
 	return 0;
 }
@@ -1331,7 +1323,6 @@ int mfc_release_verify_fw(struct mfc_core *core)
 	/* release the permission for fw region */
 	desc = &core->mfc_imgloader_desc;
 	exynos_release_subsystem_fw_stage2_ap(core->name, desc->fw_id);
-	mfc_core_change_fw_state(core, 0, MFC_FW_VERIFIED, 0);
 
 	mfc_core_debug(2, "[F/W] release verify fw\n");
 
