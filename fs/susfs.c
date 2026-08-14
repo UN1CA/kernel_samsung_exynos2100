@@ -852,7 +852,7 @@ int susfs_spoof_cmdline_or_bootconfig(struct seq_file *m) {
 #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
 static DEFINE_MUTEX(susfs_mutex_lock_open_redirect);
 static DEFINE_HASHTABLE(OPEN_REDIRECT_HLIST, 10);
-DEFINE_STATIC_SRCU(susfs_srcu_open_redirect);
+DEFINE_SRCU(susfs_srcu_open_redirect);
 
 void susfs_add_open_redirect(void __user **user_info) {
 	struct st_susfs_open_redirect info = {0};
@@ -944,8 +944,8 @@ void susfs_add_open_redirect(void __user **user_info) {
 	new_entry_redirected->reversed_lookup_only = true;
 	new_entry_redirected->spoofed_mnt_id = real_mount(target_path.mnt)->mnt_id;
 	memcpy(&new_entry_redirected->spoofed_kstatfs, &new_entry_target->spoofed_kstatfs, sizeof(struct kstatfs));
-	strncpy(new_entry_redirected->info.target_pathname, info.redirected_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
-	strncpy(new_entry_redirected->info.redirected_pathname, info.target_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
+	strscpy(new_entry_redirected->info.target_pathname, info.redirected_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
+	strscpy(new_entry_redirected->info.redirected_pathname, info.target_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
 
 	// check for existing entries, delete it first if so
 	mutex_lock(&susfs_mutex_lock_open_redirect);
@@ -983,7 +983,7 @@ void susfs_add_open_redirect(void __user **user_info) {
 		set_bit(AS_FLAGS_OPEN_REDIRECT, &redirected_inode->i_mapping->flags);
 		set_bit(AS_FLAGS_OPEN_REDIRECT, &target_inode->i_mapping->flags);
 		mutex_unlock(&susfs_mutex_lock_open_redirect);
-		synchronize_rcu();
+		synchronize_srcu(&susfs_srcu_open_redirect);
 		if (is_second_dup_found)
 			kfree(tmp_entry_redirected);
 		kfree(tmp_entry_target);
@@ -998,8 +998,8 @@ void susfs_add_open_redirect(void __user **user_info) {
 	hash_add_rcu(OPEN_REDIRECT_HLIST, &new_entry_target->node, new_entry_target->target_ino);
 	hash_add_rcu(OPEN_REDIRECT_HLIST, &new_entry_redirected->node, new_entry_redirected->target_ino);
 	// we need to mark both target and redirected path inode just for spoofing readlink as well
-	set_bit(AS_FLAGS_OPEN_REDIRECT, &redirected_inode->i_state);
-	set_bit(AS_FLAGS_OPEN_REDIRECT, &target_inode->i_state);
+	set_bit(AS_FLAGS_OPEN_REDIRECT, &redirected_inode->i_mapping->flags);
+	set_bit(AS_FLAGS_OPEN_REDIRECT, &target_inode->i_mapping->flags);
 	mutex_unlock(&susfs_mutex_lock_open_redirect);
 
 	info.err = 0;
@@ -1102,7 +1102,7 @@ int susfs_open_redirect_spoof_do_proc_readlink(struct inode *inode, char *tmp_bu
 				srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
 				return -ENAMETOOLONG;
 			}
-			strncpy(tmp_buf, entry->info.redirected_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
+			strscpy(tmp_buf, entry->info.redirected_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
 			srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
 			return 0;
 		}
@@ -1148,12 +1148,12 @@ int susfs_open_redirect_spoof_seq_show(struct inode *inode, int *out_mnt_id, uns
 	return -EINVAL;
 }
 
-int susfs_open_redirect_spoof_show_map_vma(struct inode *inode, unsigned long *out_ino, dev_t *out_dev, char *spoofed_name) {
+/* Callers must hold and release susfs_srcu_open_redirect. */
+int susfs_open_redirect_spoof_show_map_vma_srcu(struct inode *inode, unsigned long *out_ino, dev_t *out_dev, char **out_spoofed_name) {
 	struct st_susfs_open_redirect_hlist *entry = NULL;
-	int srcu_idx = srcu_read_lock(&susfs_srcu_open_redirect);
 
-	if (spoofed_name) {
-		SUSFS_LOGE("spoofed_name must be NULL first!\n");
+	if (!out_spoofed_name || *out_spoofed_name != NULL) {
+		SUSFS_LOGE("out_spoofed_name cannot be NULL and *out_spoofed_name has to be NULL\n");
 		return -EINVAL;
 	}
 
@@ -1161,22 +1161,14 @@ int susfs_open_redirect_spoof_show_map_vma(struct inode *inode, unsigned long *o
 		if (entry->reversed_lookup_only &&
 			entry->target_dev == inode->i_sb->s_dev)
 		{
-			spoofed_name = kzalloc(SUSFS_MAX_LEN_PATHNAME, GFP_KERNEL);
-			if (!spoofed_name) {
-				SUSFS_LOGE("no enough memeory\n");
-				srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
-				return -ENOMEM;
-			}
 			SUSFS_LOGI("spoof maps ino/dev/name for redirected path: '%s'\n",
 					entry->info.target_pathname);
 			*out_ino = entry->redirected_ino;
 			*out_dev = entry->redirected_dev;
-			strncpy(spoofed_name, entry->info.redirected_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
-			srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
+			*out_spoofed_name = entry->info.redirected_pathname;
 			return 0;
 		}
 	}
-	srcu_read_unlock(&susfs_srcu_open_redirect, srcu_idx);
 	return -EINVAL;
 }
 #endif // #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
