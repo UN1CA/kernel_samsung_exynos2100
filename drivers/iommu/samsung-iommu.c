@@ -1007,6 +1007,11 @@ samsung_sysmmu_get_resv_regions(struct device *dev, struct list_head *head)
 	struct platform_device *pdev;
 	int ret;
 
+	if (!IS_ENABLED(CONFIG_EXPERIMENTAL_DMA_BUF)) {
+		pr_info("Reserved iova mapping can't be registered on ION mode\n");
+		return;
+	}
+
 	target_node = of_parse_phandle(dev->of_node, "samsung,iommu-group", 0);
 	if (!target_node) {
 		dev_err(dev, "doesn't have iommu-group property\n");
