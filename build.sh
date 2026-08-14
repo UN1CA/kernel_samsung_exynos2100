@@ -51,30 +51,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-enable_susfs() {
+apply_ksun_patch() {
 
     KSUN_DIR="$PWD/KernelSU-Next/kernel"
-    SUS_MARKER="config KSU_SUSFS"
+    MARKER="config KSU_SUSFS"
 
-    if [[ "$SUSFS_OPTION" == "y" ]]; then
-
-        if grep -q "$SUS_MARKER" "$KSUN_DIR/Kconfig" 2>/dev/null; then
-            echo "SuSFS already enabled, skipping patch."
-            return
-        fi
-
-        echo "Applying SuSFS patch..."
-
-        patch -d "$PWD/KernelSU-Next" -p1 < "$PWD/patches/enable-susfs.patch" || {
-            echo "Failed to apply SuSFS patch!"
-            exit 1
-        }
-
-    else
-        echo "Disabling SuSFS..."
-
-        patch -R -N -d "$PWD/KernelSU-Next" -p1 < "$PWD/patches/enable-susfs.patch"
+    # This patch is the KernelSU Next port for this tree, not a SuSFS switch.
+    # SuSFS is turned on separately by arch/arm64/configs/susfs.config, so the
+    # patch has to be applied for every KSU build, SuSFS or not.
+    if grep -q "$MARKER" "$KSUN_DIR/Kconfig" 2>/dev/null; then
+        echo "KernelSU Next already patched, skipping."
+        return
     fi
+
+    echo "Patching KernelSU Next..."
+
+    patch -d "$PWD/KernelSU-Next" -p1 < "$PWD/patches/enable-susfs.patch" || {
+        echo "Failed to patch KernelSU Next!"
+        exit 1
+    }
 }
 
 echo "Preparing the build environment..."
@@ -467,7 +462,7 @@ if [[ "$KSU_OPTION" != "y" ]]; then
 
 else
 
-    enable_susfs
+    apply_ksun_patch
     
     if ! grep -Fxq "$KSU_VAR" "$KCONFIG_FILE"; then
         sed -i "\|endmenu|i $KSU_VAR" "$KCONFIG_FILE"

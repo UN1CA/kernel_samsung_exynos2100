@@ -77,7 +77,7 @@ index c77016613edbec5aa87a8680792e0adc35cfc0cd..19771dcb0e518c06833ffe171e64d317
 +	bool "KernelSU addon - SUSFS"
 +	depends on KSU
 +	depends on THREAD_INFO_IN_TASK
-+	default y
++	default n
 +	help
 +	  Patch and enable SUSFS with KernelSU.
 +
