@@ -380,7 +380,7 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
 	return cp_new_stat(&stat, statbuf);
 }
 
-#if defined(CONFIG_KSU)
+#if defined(CONFIG_KSU_MANUAL_HOOK)
 __attribute__((hot)) 
 extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
 				int *flags);
@@ -393,7 +393,7 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
 	struct kstat stat;
 	int error;
 
-#if defined(CONFIG_KSU)
+#if defined(CONFIG_KSU_MANUAL_HOOK)
 	ksu_handle_stat(&dfd, &filename, &flag);
 #endif
 
@@ -548,7 +548,7 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
 	struct kstat stat;
 	int error;
 
-#if defined(CONFIG_KSU)
+#if defined(CONFIG_KSU_MANUAL_HOOK)
 	ksu_handle_stat(&dfd, &filename, &flag); 
 #endif
 
