@@ -658,6 +658,7 @@ void susfs_try_umount(uid_t uid) {
 
 /* spoof_uname */
 #ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
+static DEFINE_MUTEX(susfs_mutex_lock_set_uname);
 static struct st_susfs_uname my_uname = {0};
 static bool susfs_uname_owner;
 static bool is_susfs_uname_set;
